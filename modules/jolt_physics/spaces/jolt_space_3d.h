@@ -30,6 +30,8 @@
 
 #pragma once
 
+#include "jolt_contact_listener_3d.h"
+
 #include "servers/physics_3d/physics_server_3d.h"
 
 #include <Jolt/Jolt.h>
@@ -52,6 +54,23 @@ class JoltObject3D;
 class JoltPhysicsDirectSpaceState3D;
 class JoltShapedObject3D;
 class JoltSoftBody3D;
+
+class JoltSpaceSnapshot3D : public RefCounted {
+	GDCLASS(JoltSpaceSnapshot3D, RefCounted);
+	friend class JoltSpace3D;
+	RID space;
+	PackedByteArray state;
+	Vector<uint64_t> topology;
+	Vector<uint64_t> collision_filters;
+	Vector<Vector<real_t>> body_extras;
+	Vector<JPH::ShapeRefC> shapes;
+	Vector<real_t> scales;
+	JoltContactListener3D::RollbackState contacts;
+	float last_step = 0.0f;
+
+protected:
+	static void _bind_methods() {}
+};
 
 class JoltSpace3D {
 	Mutex pending_objects_mutex;
@@ -85,12 +104,15 @@ class JoltSpace3D {
 
 	void _pre_step(float p_step);
 	void _post_step(float p_step);
+	Vector<uint64_t> _get_rollback_topology() const;
 
 public:
 	explicit JoltSpace3D(JPH::JobSystem *p_job_system, JPH::TempAllocator *p_temp_allocator);
 	~JoltSpace3D();
 
 	void step(float p_step);
+	Ref<RefCounted> get_rollback_state();
+	bool set_rollback_state(const Ref<RefCounted> &p_state);
 
 	void call_queries();
 

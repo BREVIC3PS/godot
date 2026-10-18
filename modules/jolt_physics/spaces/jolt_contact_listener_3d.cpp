@@ -553,6 +553,41 @@ void JoltContactListener3D::_clear_area_soft_body_overlaps() {
 	area_soft_body_overlaps.clear();
 }
 
+JoltContactListener3D::RollbackState JoltContactListener3D::get_rollback_state() const {
+	RollbackState state;
+	state.overlaps = area_overlaps;
+	state.soft_body_overlaps = area_soft_body_overlaps;
+	return state;
+}
+
+void JoltContactListener3D::set_rollback_state(const RollbackState &p_state) {
+	// Reconcile the Godot-side area membership as well as Jolt's contact cache.
+	// User callbacks remain deferred until space_flush_queries().
+	area_enters.clear();
+	area_exits.clear();
+	for (const JPH::SubShapeIDPair &pair : area_overlaps) {
+		if (!p_state.overlaps.has(pair)) {
+			area_exits.insert(pair);
+		}
+	}
+	for (const JPH::SubShapeIDPair &pair : p_state.overlaps) {
+		if (!area_overlaps.has(pair)) {
+			area_enters.insert(pair);
+		}
+	}
+	for (const JPH::SubShapeIDPair &pair : area_soft_body_overlaps) {
+		area_exits.insert(pair);
+	}
+	for (const JPH::SubShapeIDPair &pair : p_state.soft_body_overlaps) {
+		area_enters.insert(pair);
+	}
+	_flush_area_exits();
+	_flush_area_enters();
+	area_overlaps = p_state.overlaps;
+	area_soft_body_overlaps = p_state.soft_body_overlaps;
+	manifolds_by_shape_pair.clear();
+}
+
 void JoltContactListener3D::pre_step() {
 	_clear_area_soft_body_overlaps();
 

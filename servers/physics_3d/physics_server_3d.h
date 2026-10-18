@@ -290,6 +290,8 @@ public:
 	virtual void space_set_active(RID p_space, bool p_active) = 0;
 	virtual bool space_is_active(RID p_space) const = 0;
 	virtual void space_step(RID p_space, real_t p_delta) = 0;
+	virtual Ref<RefCounted> space_get_rollback_state(RID p_space) const { return Ref<RefCounted>(); }
+	virtual bool space_set_rollback_state(RID p_space, const Ref<RefCounted> &p_state) { return false; }
 	virtual void space_flush_queries(RID p_space) = 0;
 
 	enum SpaceParameter {
@@ -470,6 +472,10 @@ public:
 
 	virtual void body_set_state(RID p_body, BodyState p_state, const Variant &p_variant) = 0;
 	virtual Variant body_get_state(RID p_body, BodyState p_state) const = 0;
+	virtual bool body_set_rollback_scale(RID p_body, real_t p_scale) { return false; }
+	virtual real_t body_get_rollback_scale(RID p_body) const { return 1.0; }
+	virtual PackedByteArray body_get_rollback_state(RID p_body) const { return PackedByteArray(); }
+	virtual bool body_set_rollback_state(RID p_body, const PackedByteArray &p_state) { return false; }
 
 	virtual void body_apply_central_impulse(RID p_body, const Vector3 &p_impulse) = 0;
 	virtual void body_apply_impulse(RID p_body, const Vector3 &p_impulse, const Vector3 &p_position = Vector3()) = 0;

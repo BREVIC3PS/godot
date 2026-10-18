@@ -619,6 +619,35 @@ bool JoltArea3D::shape_exited(const JPH::BodyID &p_body_id, const JPH::SubShapeI
 	return body_shape_exited(p_body_id, p_other_shape_id, p_self_shape_id) || area_shape_exited(p_body_id, p_other_shape_id, p_self_shape_id);
 }
 
+void JoltArea3D::reconcile_rollback_events() {
+	// Discard events from the abandoned future. Compare the restored membership
+	// with what monitoring callbacks have actually observed, including compound shapes.
+	for (OverlapsById *objects : { &bodies_by_id, &areas_by_id }) {
+		for (KeyValue<JPH::BodyID, Overlap> &entry : *objects) {
+			Overlap &overlap = entry.value;
+			overlap.pending_added.clear();
+			overlap.pending_removed.clear();
+			HashMap<ShapeIndexPair, int, ShapeIndexPair> desired;
+			for (const KeyValue<ShapeIDPair, ShapeIndexPair> &pair : overlap.shape_pairs) {
+				desired[pair.value]++;
+			}
+			for (const KeyValue<ShapeIndexPair, int> &count : desired) {
+				const int *old = overlap.ref_counts.getptr(count.key);
+				for (int index = old != nullptr ? *old : 0; index < count.value; index++) {
+					overlap.pending_added.push_back(count.key);
+				}
+			}
+			for (const KeyValue<ShapeIndexPair, int> &count : overlap.ref_counts) {
+				const int *next = desired.getptr(count.key);
+				for (int index = next != nullptr ? *next : 0; index < count.value; index++) {
+					overlap.pending_removed.push_back(count.key);
+				}
+			}
+		}
+	}
+	_enqueue_call_queries();
+}
+
 void JoltArea3D::call_queries() {
 	_flush_events(bodies_by_id, body_monitor_callback);
 	_flush_events(areas_by_id, area_monitor_callback);

@@ -49,6 +49,10 @@ protected:
 	LocalVector<JoltShapeInstance3D> shapes;
 
 	Vector3 scale = Vector3(1, 1, 1);
+	// Only this explicit uniform geometry multiplier is part of rollback state.
+	// Ordinary shape/transform edits still invalidate old space snapshots.
+	real_t rollback_scale = 1.0;
+	uint64_t shape_revision = 0;
 
 	JPH::ShapeRefC jolt_shape;
 	JPH::ShapeRefC previous_jolt_shape;
@@ -81,6 +85,10 @@ public:
 	Transform3D get_transform_scaled() const;
 
 	Vector3 get_scale() const { return scale; }
+	real_t get_rollback_scale() const { return rollback_scale; }
+	uint64_t get_shape_revision() const { return shape_revision; }
+	bool set_rollback_scale(real_t p_scale);
+	void restore_rollback_shape(const JPH::ShapeRefC &p_shape, real_t p_scale);
 	Basis get_basis() const;
 	Vector3 get_position() const;
 

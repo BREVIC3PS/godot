@@ -66,8 +66,8 @@ JPH::ShapeRefC JoltShapedObject3D::_try_build_shape(bool p_optimize_compound) {
 		result = JoltShape3D::with_center_of_mass(result, get_center_of_mass_custom());
 	}
 
-	if (scale != Vector3(1, 1, 1)) {
-		Vector3 actual_scale = scale;
+	if (scale * rollback_scale != Vector3(1, 1, 1)) {
+		Vector3 actual_scale = scale * rollback_scale;
 		JOLT_ENSURE_SCALE_VALID(result, actual_scale, vformat("Failed to correctly scale body '%s'.", to_string()));
 		result = JoltShape3D::with_scale(result, actual_scale);
 	}
@@ -165,6 +165,7 @@ void JoltShapedObject3D::_dequeue_needs_optimization() {
 }
 
 void JoltShapedObject3D::_shapes_changed() {
+	shape_revision++;
 	commit_shapes(false);
 }
 
@@ -292,6 +293,31 @@ JPH::ShapeRefC JoltShapedObject3D::build_shapes(bool p_optimize_compound) {
 	}
 
 	return new_shape;
+}
+
+bool JoltShapedObject3D::set_rollback_scale(real_t p_scale) {
+	if (!Math::is_finite(p_scale) || p_scale < 0.25 || p_scale > 4.0) {
+		return false;
+	}
+	if (rollback_scale == p_scale) {
+		return true;
+	}
+	rollback_scale = p_scale;
+	// Build an immutable shape: snapshots retain their original shape and subshape IDs.
+	commit_shapes(true);
+	return true;
+}
+
+void JoltShapedObject3D::restore_rollback_shape(const JPH::ShapeRefC &p_shape, real_t p_scale) {
+	rollback_scale = p_scale;
+	_dequeue_shapes_changed();
+	_dequeue_needs_optimization();
+	previous_jolt_shape = nullptr;
+	if (jolt_shape != p_shape) {
+		jolt_shape = p_shape;
+		space->get_body_iface().SetShape(jolt_body->GetID(), jolt_shape, false, JPH::EActivation::DontActivate);
+		_shapes_committed();
+	}
 }
 
 void JoltShapedObject3D::commit_shapes(bool p_optimize_compound) {

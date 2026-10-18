@@ -155,6 +155,8 @@ public:
 	virtual void space_set_active(RID p_space, bool p_active) override;
 	virtual bool space_is_active(RID p_space) const override;
 	virtual void space_step(RID p_space, real_t p_delta) override;
+	virtual Ref<RefCounted> space_get_rollback_state(RID p_space) const override;
+	virtual bool space_set_rollback_state(RID p_space, const Ref<RefCounted> &p_state) override;
 	virtual void space_flush_queries(RID p_space) override;
 
 	virtual void space_set_param(RID p_space, PhysicsServer3D::SpaceParameter p_param, real_t p_value) override;
@@ -256,6 +258,10 @@ public:
 
 	virtual void body_set_state(RID p_body, PhysicsServer3D::BodyState p_state, const Variant &p_value) override;
 	virtual Variant body_get_state(RID p_body, PhysicsServer3D::BodyState p_state) const override;
+	virtual bool body_set_rollback_scale(RID p_body, real_t p_scale) override;
+	virtual real_t body_get_rollback_scale(RID p_body) const override;
+	virtual PackedByteArray body_get_rollback_state(RID p_body) const override;
+	virtual bool body_set_rollback_state(RID p_body, const PackedByteArray &p_state) override;
 
 	virtual void body_apply_central_impulse(RID p_body, const Vector3 &p_impulse) override;
 	virtual void body_apply_impulse(RID p_body, const Vector3 &p_impulse, const Vector3 &p_position) override;

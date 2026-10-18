@@ -340,6 +340,9 @@ void SceneMultiplayer::_process_sys(int p_from, const uint8_t *p_packet, int p_p
 				}
 			} else {
 				ERR_FAIL_COND(p_from != 1); // Bug.
+				if (unlikely(!connected_peers.has(peer))) {
+					return;
+				}
 				should_process = true;
 			}
 			if (should_process) {

@@ -720,6 +720,8 @@ void PhysicsServer3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("space_set_active", "space", "active"), &PhysicsServer3D::space_set_active);
 	ClassDB::bind_method(D_METHOD("space_is_active", "space"), &PhysicsServer3D::space_is_active);
 	ClassDB::bind_method(D_METHOD("space_step", "space", "delta"), &PhysicsServer3D::space_step);
+	ClassDB::bind_method(D_METHOD("space_get_rollback_state", "space"), &PhysicsServer3D::space_get_rollback_state);
+	ClassDB::bind_method(D_METHOD("space_set_rollback_state", "space", "state"), &PhysicsServer3D::space_set_rollback_state);
 	ClassDB::bind_method(D_METHOD("space_flush_queries", "space"), &PhysicsServer3D::space_flush_queries);
 	ClassDB::bind_method(D_METHOD("space_set_param", "space", "param", "value"), &PhysicsServer3D::space_set_param);
 	ClassDB::bind_method(D_METHOD("space_get_param", "space", "param"), &PhysicsServer3D::space_get_param);
@@ -804,6 +806,10 @@ void PhysicsServer3D::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("body_set_state", "body", "state", "value"), &PhysicsServer3D::body_set_state);
 	ClassDB::bind_method(D_METHOD("body_get_state", "body", "state"), &PhysicsServer3D::body_get_state);
+	ClassDB::bind_method(D_METHOD("body_set_rollback_scale", "body", "scale"), &PhysicsServer3D::body_set_rollback_scale);
+	ClassDB::bind_method(D_METHOD("body_get_rollback_scale", "body"), &PhysicsServer3D::body_get_rollback_scale);
+	ClassDB::bind_method(D_METHOD("body_get_rollback_state", "body"), &PhysicsServer3D::body_get_rollback_state);
+	ClassDB::bind_method(D_METHOD("body_set_rollback_state", "body", "state"), &PhysicsServer3D::body_set_rollback_state);
 
 	ClassDB::bind_method(D_METHOD("body_apply_central_impulse", "body", "impulse"), &PhysicsServer3D::body_apply_central_impulse);
 	ClassDB::bind_method(D_METHOD("body_apply_impulse", "body", "impulse", "position"), &PhysicsServer3D::body_apply_impulse, Vector3());

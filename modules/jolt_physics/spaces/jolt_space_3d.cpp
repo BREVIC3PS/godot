@@ -50,6 +50,7 @@
 #include <Jolt/Physics/Collision/CollideShapeVsShapePerLeaf.h>
 #include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
 #include <Jolt/Physics/PhysicsScene.h>
+#include <Jolt/Physics/StateRecorderImpl.h>
 
 namespace {
 
@@ -219,6 +220,97 @@ void JoltSpace3D::step(float p_step) {
 	_post_step(p_step);
 
 	stepping = false;
+}
+
+Vector<uint64_t> JoltSpace3D::_get_rollback_topology() const {
+	Vector<uint64_t> topology;
+	JPH::BodyIDVector bodies;
+	physics_system->GetBodies(bodies);
+	topology.push_back(bodies.size());
+	for (const JPH::BodyID &body : bodies) {
+		topology.push_back(body.GetIndexAndSequenceNumber());
+		const JoltObject3D *object = try_get_object(body);
+		const JoltShapedObject3D *shaped = object != nullptr ? object->as_shaped() : nullptr;
+		topology.push_back(shaped != nullptr ? shaped->get_shape_revision() : (uint64_t)physics_system->GetBodyInterface().GetShape(body).GetPtr());
+		topology.push_back((uint64_t)physics_system->GetBodyInterface().GetMotionType(body));
+	}
+	const JPH::Constraints constraints = physics_system->GetConstraints();
+	topology.push_back(constraints.size());
+	for (const JPH::Ref<JPH::Constraint> &constraint : constraints) {
+		topology.push_back((uint64_t)constraint.GetPtr());
+	}
+	return topology;
+}
+
+Ref<RefCounted> JoltSpace3D::get_rollback_state() {
+	flush_pending_objects();
+	Ref<JoltSpaceSnapshot3D> snapshot;
+	snapshot.instantiate();
+	snapshot->space = rid;
+	snapshot->topology = _get_rollback_topology();
+	JPH::BodyIDVector bodies;
+	physics_system->GetBodies(bodies);
+	for (const JPH::BodyID &body : bodies) {
+		const JoltObject3D *object = try_get_object(body);
+		ERR_FAIL_NULL_V(object, Ref<RefCounted>());
+		snapshot->collision_filters.push_back((uint64_t(object->get_collision_layer()) << 32) | object->get_collision_mask());
+		const JoltShapedObject3D *shaped = object->as_shaped();
+		snapshot->shapes.push_back(physics_system->GetBodyInterface().GetShape(body));
+		snapshot->scales.push_back(shaped != nullptr ? shaped->get_rollback_scale() : 1.0);
+		const JoltBody3D *rigid = object->as_body();
+		snapshot->body_extras.push_back(rigid != nullptr ? rigid->get_rollback_extras() : Vector<real_t>());
+	}
+	snapshot->contacts = contact_listener->get_rollback_state();
+	snapshot->last_step = last_step;
+	JPH::StateRecorderImpl recorder;
+	physics_system->SaveState(recorder);
+	const std::string data = recorder.GetData();
+	snapshot->state.resize(data.size());
+	memcpy(snapshot->state.ptrw(), data.data(), data.size());
+	return snapshot;
+}
+
+bool JoltSpace3D::set_rollback_state(const Ref<RefCounted> &p_state) {
+	Ref<JoltSpaceSnapshot3D> snapshot = p_state;
+	if (snapshot.is_null() || snapshot->space != rid || snapshot->topology != _get_rollback_topology()) {
+		return false;
+	}
+	JPH::BodyIDVector bodies;
+	physics_system->GetBodies(bodies);
+	if (snapshot->collision_filters.size() != int64_t(bodies.size())) {
+		return false;
+	}
+	LocalVector<JoltObject3D *> objects;
+	for (const JPH::BodyID &body : bodies) {
+		JoltObject3D *object = try_get_object(body);
+		ERR_FAIL_NULL_V(object, false);
+		objects.push_back(object);
+	}
+	for (uint32_t index = 0; index < objects.size(); index++) {
+		if (JoltShapedObject3D *shaped = objects[index]->as_shaped()) {
+			shaped->restore_rollback_shape(snapshot->shapes[index], snapshot->scales[index]);
+		}
+		const uint64_t filter = snapshot->collision_filters[index];
+		objects[index]->set_collision_layer(uint32_t(filter >> 32));
+		objects[index]->set_collision_mask(uint32_t(filter));
+		if (JoltBody3D *body = objects[index]->as_body()) {
+			body->set_rollback_extras(snapshot->body_extras[index]);
+		}
+	}
+	contact_listener->set_rollback_state(snapshot->contacts);
+	for (JoltObject3D *object : objects) {
+		if (JoltArea3D *area = object->as_area()) {
+			area->reconcile_rollback_events();
+		}
+	}
+	JPH::StateRecorderImpl recorder;
+	recorder.WriteBytes(snapshot->state.ptr(), snapshot->state.size());
+	recorder.Rewind();
+	if (!physics_system->RestoreState(recorder) || recorder.IsFailed()) {
+		return false;
+	}
+	last_step = snapshot->last_step;
+	return true;
 }
 
 void JoltSpace3D::call_queries() {

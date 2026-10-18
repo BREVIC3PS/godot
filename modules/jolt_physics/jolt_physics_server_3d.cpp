@@ -223,6 +223,20 @@ void JoltPhysicsServer3D::space_step(RID p_space, real_t p_delta) {
 	job_system->post_step();
 }
 
+Ref<RefCounted> JoltPhysicsServer3D::space_get_rollback_state(RID p_space) const {
+	JoltSpace3D *space = space_owner.get_or_null(p_space);
+	ERR_FAIL_NULL_V(space, Ref<RefCounted>());
+	ERR_FAIL_COND_V(space->is_stepping(), Ref<RefCounted>());
+	return space->get_rollback_state();
+}
+
+bool JoltPhysicsServer3D::space_set_rollback_state(RID p_space, const Ref<RefCounted> &p_state) {
+	JoltSpace3D *space = space_owner.get_or_null(p_space);
+	ERR_FAIL_NULL_V(space, false);
+	ERR_FAIL_COND_V(space->is_stepping(), false);
+	return space->set_rollback_state(p_state);
+}
+
 void JoltPhysicsServer3D::space_flush_queries(RID p_space) {
 	flushing_queries = true;
 
@@ -780,6 +794,30 @@ Variant JoltPhysicsServer3D::body_get_state(RID p_body, BodyState p_state) const
 	ERR_FAIL_NULL_V(body, Variant());
 
 	return body->get_state(p_state);
+}
+
+bool JoltPhysicsServer3D::body_set_rollback_scale(RID p_body, real_t p_scale) {
+	JoltBody3D *body = body_owner.get_or_null(p_body);
+	ERR_FAIL_NULL_V(body, false);
+	return body->set_rollback_scale(p_scale);
+}
+
+real_t JoltPhysicsServer3D::body_get_rollback_scale(RID p_body) const {
+	JoltBody3D *body = body_owner.get_or_null(p_body);
+	ERR_FAIL_NULL_V(body, 1.0);
+	return body->get_rollback_scale();
+}
+
+PackedByteArray JoltPhysicsServer3D::body_get_rollback_state(RID p_body) const {
+	JoltBody3D *body = body_owner.get_or_null(p_body);
+	ERR_FAIL_NULL_V(body, PackedByteArray());
+	return body->get_rollback_state();
+}
+
+bool JoltPhysicsServer3D::body_set_rollback_state(RID p_body, const PackedByteArray &p_state) {
+	JoltBody3D *body = body_owner.get_or_null(p_body);
+	ERR_FAIL_NULL_V(body, false);
+	return body->set_rollback_state(p_state);
 }
 
 void JoltPhysicsServer3D::body_apply_central_impulse(RID p_body, const Vector3 &p_impulse) {

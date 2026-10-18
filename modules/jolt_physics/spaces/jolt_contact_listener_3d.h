@@ -128,6 +128,13 @@ class JoltContactListener3D final
 	void _clear_area_soft_body_overlaps();
 
 public:
+	struct RollbackState {
+		HashSet<JPH::SubShapeIDPair, ShapePairHasher> overlaps;
+		LocalVector<JPH::SubShapeIDPair> soft_body_overlaps;
+	};
+	RollbackState get_rollback_state() const;
+	void set_rollback_state(const RollbackState &p_state);
+
 	explicit JoltContactListener3D(JoltSpace3D *p_space) :
 			space(p_space) {}
 

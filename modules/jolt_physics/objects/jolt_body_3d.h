@@ -160,6 +160,11 @@ public:
 	void set_transform(Transform3D p_transform);
 
 	Variant get_state(PhysicsServer3D::BodyState p_state) const;
+	bool set_rollback_scale(real_t p_scale);
+	PackedByteArray get_rollback_state() const;
+	bool set_rollback_state(const PackedByteArray &p_state);
+	Vector<real_t> get_rollback_extras() const;
+	void set_rollback_extras(const Vector<real_t> &p_state);
 	void set_state(PhysicsServer3D::BodyState p_state, const Variant &p_value);
 
 	Variant get_param(PhysicsServer3D::BodyParameter p_param) const;

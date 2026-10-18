@@ -338,6 +338,13 @@ Error ENetMultiplayerPeer::put_packet(const uint8_t *p_buffer, int p_buffer_size
 	ERR_FAIL_COND_V_MSG(connection_status != CONNECTION_CONNECTED, ERR_UNCONFIGURED, "The multiplayer instance isn't currently connected to any server or client.");
 	ERR_FAIL_COND_V_MSG(target_peer != 0 && !peers.has(Math::abs(target_peer)), ERR_INVALID_PARAMETER, vformat("Invalid target peer: %d", target_peer));
 	ERR_FAIL_COND_V(active_mode == MODE_CLIENT && !peers.has(1), ERR_BUG);
+	if (active_mode == MODE_CLIENT) {
+		if (peers[1]->get_state() != ENetPacketPeer::STATE_CONNECTED) {
+			return ERR_UNAVAILABLE;
+		}
+	} else if (target_peer > 0 && peers[target_peer]->get_state() != ENetPacketPeer::STATE_CONNECTED) {
+		return ERR_UNAVAILABLE;
+	}
 
 	int packet_flags = 0;
 	int channel = SYSCH_RELIABLE;
@@ -377,20 +384,26 @@ Error ENetMultiplayerPeer::put_packet(const uint8_t *p_buffer, int p_buffer_size
 			// Send to all but one and make copies for sending.
 			int exclude = -target_peer;
 			for (KeyValue<int, Ref<ENetPacketPeer>> &E : peers) {
-				if (E.key == exclude) {
+				if (E.key == exclude || E.value->get_state() != ENetPacketPeer::STATE_CONNECTED) {
 					continue;
 				}
 				E.value->send(channel, packet);
 			}
 			_destroy_unused(packet);
 		} else {
-			peers[target_peer]->send(channel, packet);
+			if (peers[target_peer]->send(channel, packet) != 0) {
+				_destroy_unused(packet);
+				return FAILED;
+			}
 		}
 		ERR_FAIL_COND_V(!hosts.has(0), ERR_BUG);
 		hosts[0]->flush();
 
 	} else if (active_mode == MODE_CLIENT) {
-		peers[1]->send(channel, packet); // Send to server for broadcast.
+		if (peers[1]->send(channel, packet) != 0) {
+			_destroy_unused(packet);
+			return FAILED;
+		}
 		ERR_FAIL_COND_V(!hosts.has(0), ERR_BUG);
 		hosts[0]->flush();
 
@@ -398,7 +411,7 @@ Error ENetMultiplayerPeer::put_packet(const uint8_t *p_buffer, int p_buffer_size
 		if (target_peer <= 0) {
 			int exclude = Math::abs(target_peer);
 			for (KeyValue<int, Ref<ENetPacketPeer>> &E : peers) {
-				if (E.key == exclude) {
+				if (E.key == exclude || E.value->get_state() != ENetPacketPeer::STATE_CONNECTED) {
 					continue;
 				}
 				E.value->send(channel, packet);
@@ -407,7 +420,10 @@ Error ENetMultiplayerPeer::put_packet(const uint8_t *p_buffer, int p_buffer_size
 			}
 			_destroy_unused(packet);
 		} else {
-			peers[target_peer]->send(channel, packet);
+			if (peers[target_peer]->send(channel, packet) != 0) {
+				_destroy_unused(packet);
+				return FAILED;
+			}
 			ERR_FAIL_COND_V(!hosts.has(target_peer), ERR_BUG);
 			hosts[target_peer]->flush();
 		}

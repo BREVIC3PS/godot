@@ -114,6 +114,8 @@ public:
 	FUNC2(space_set_active, RID, bool);
 	FUNC1RC(bool, space_is_active, RID);
 	FUNC2(space_step, RID, real_t);
+	FUNC1RC(Ref<RefCounted>, space_get_rollback_state, RID);
+	FUNC2R(bool, space_set_rollback_state, RID, const Ref<RefCounted> &);
 	FUNC1(space_flush_queries, RID);
 
 	FUNC3(space_set_param, RID, SpaceParameter, real_t);
@@ -225,6 +227,10 @@ public:
 
 	FUNC3(body_set_state, RID, BodyState, const Variant &);
 	FUNC2RC(Variant, body_get_state, RID, BodyState);
+	FUNC2R(bool, body_set_rollback_scale, RID, real_t);
+	FUNC1RC(real_t, body_get_rollback_scale, RID);
+	FUNC1RC(PackedByteArray, body_get_rollback_state, RID);
+	FUNC2R(bool, body_set_rollback_state, RID, const PackedByteArray &);
 
 	FUNC2(body_apply_torque_impulse, RID, const Vector3 &);
 	FUNC2(body_apply_central_impulse, RID, const Vector3 &);

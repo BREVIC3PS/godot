@@ -33,9 +33,11 @@
 #include "jolt_globals.h"
 #include "jolt_physics_server_3d.h"
 #include "jolt_project_settings.h"
+#include "spaces/jolt_space_3d.h"
 
 #include "core/config/project_settings.h"
 #include "core/object/callable_mp.h"
+#include "core/object/class_db.h"
 #include "servers/physics_3d/physics_server_3d_wrap_mt.h"
 
 PhysicsServer3D *create_jolt_physics_server() {
@@ -56,6 +58,7 @@ void initialize_jolt_physics_module(ModuleInitializationLevel p_level) {
 	}
 
 	jolt_initialize();
+	ClassDB::register_internal_class<JoltSpaceSnapshot3D>();
 	PhysicsServer3DManager::get_singleton()->register_server("Jolt Physics", callable_mp_static(&create_jolt_physics_server));
 	JoltProjectSettings::register_settings();
 }

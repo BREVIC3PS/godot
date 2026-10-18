@@ -42,6 +42,8 @@
 #include "jolt_physics_direct_body_state_3d.h"
 #include "jolt_soft_body_3d.h"
 
+#include <Jolt/Physics/StateRecorderImpl.h>
+
 JPH::BroadPhaseLayer JoltBody3D::_get_broad_phase_layer() const {
 	switch (mode) {
 		case PhysicsServer3D::BODY_MODE_STATIC: {
@@ -537,6 +539,122 @@ void JoltBody3D::set_transform(Transform3D p_transform) {
 	}
 
 	_transform_changed();
+}
+
+bool JoltBody3D::set_rollback_scale(real_t p_scale) {
+	// Scaling rebuilds attached constraints; their identities cannot cross a
+	// space restore. Keep that unsupported topology change explicit and atomic.
+	if (p_scale != rollback_scale && !joints.is_empty()) {
+		return false;
+	}
+	return JoltShapedObject3D::set_rollback_scale(p_scale);
+}
+
+Vector<real_t> JoltBody3D::get_rollback_extras() const {
+	Vector<real_t> result;
+	const Vector3 vectors[] = { kinematic_transform.basis.rows[0], kinematic_transform.basis.rows[1], kinematic_transform.basis.rows[2], kinematic_transform.origin, constant_force, constant_torque, linear_surface_velocity, angular_surface_velocity, Vector3(rollback_scale, 0, 0) };
+	for (const Vector3 &vector : vectors) {
+		for (int axis = 0; axis < 3; axis++) {
+			result.push_back(vector[axis]);
+		}
+	}
+	return result;
+}
+
+void JoltBody3D::set_rollback_extras(const Vector<real_t> &p_state) {
+	ERR_FAIL_COND(p_state.size() != 27);
+	set_rollback_scale(p_state[24]);
+	Vector3 *vectors[] = { &kinematic_transform.basis.rows[0], &kinematic_transform.basis.rows[1], &kinematic_transform.basis.rows[2], &kinematic_transform.origin, &constant_force, &constant_torque, &linear_surface_velocity, &angular_surface_velocity };
+	for (int index = 0; index < 8; index++) {
+		for (int axis = 0; axis < 3; axis++) {
+			(*vectors[index])[axis] = p_state[index * 3 + axis];
+		}
+	}
+}
+
+PackedByteArray JoltBody3D::get_rollback_state() const {
+	ERR_FAIL_COND_V(!in_space(), PackedByteArray());
+	space->flush_pending_objects();
+	JPH::StateRecorderImpl recorder;
+	space->get_physics_system().SaveBodyState(*jolt_body, recorder);
+	const std::string data = recorder.GetData();
+	PackedByteArray result;
+	const Vector<real_t> extras = get_rollback_extras();
+	result.resize(data.size() + 8 + extras.size() * sizeof(real_t));
+	uint8_t *bytes = result.ptrw();
+	bytes[0] = 'J';
+	bytes[1] = 'B';
+	bytes[2] = 'R';
+	bytes[3] = 3;
+	bytes[4] = sizeof(real_t);
+	bytes[5] = (uint8_t)mode;
+	bytes[6] = 0;
+	bytes[7] = 0;
+	memcpy(bytes + 8, data.data(), data.size());
+	memcpy(bytes + 8 + data.size(), extras.ptr(), extras.size() * sizeof(real_t));
+	return result;
+}
+
+bool JoltBody3D::set_rollback_state(const PackedByteArray &p_state) {
+	if (!in_space()) {
+		return false;
+	}
+	const PackedByteArray current = get_rollback_state();
+	if (p_state.size() != current.size() || memcmp(p_state.ptr(), current.ptr(), 8) != 0) {
+		return false;
+	}
+	const uint8_t *bytes = p_state.ptr() + 8;
+	const int64_t native_size = p_state.size() - 8 - 27 * sizeof(real_t);
+	if (bytes[0] > 1 || (mode != PhysicsServer3D::BODY_MODE_STATIC && bytes[native_size - 1] > 1)) {
+		return false;
+	}
+	Vector<real_t> extras;
+	extras.resize(27);
+	memcpy(extras.ptrw(), bytes + native_size, 27 * sizeof(real_t));
+	if (extras[24] < 0.25 || extras[24] > 4.0 || extras[25] != 0 || extras[26] != 0) {
+		return false;
+	}
+	for (real_t value : extras) {
+		if (!Math::is_finite(value)) {
+			return false;
+		}
+	}
+	if (mode == PhysicsServer3D::BODY_MODE_KINEMATIC) {
+		Basis basis(Vector3(extras[0], extras[1], extras[2]), Vector3(extras[3], extras[4], extras[5]), Vector3(extras[6], extras[7], extras[8]));
+		if (!basis.is_rotation()) {
+			return false;
+		}
+	}
+	JPH::StateRecorderImpl recorder;
+	recorder.WriteBytes(bytes, native_size);
+	recorder.Rewind();
+	bool active = false;
+	JPH::RVec3 position;
+	JPH::Quat rotation;
+	recorder.Read(active);
+	recorder.Read(position);
+	recorder.Read(rotation);
+	if (!to_godot(position).is_finite() || rotation.IsNaN() || !rotation.IsNormalized()) {
+		return false;
+	}
+	const int64_t float_end = native_size - (mode != PhysicsServer3D::BODY_MODE_STATIC ? sizeof(bool) : 0);
+	for (int64_t offset = sizeof(bool) + 3 * sizeof(real_t); offset + (int64_t)sizeof(float) <= float_end; offset += sizeof(float)) {
+		float value;
+		memcpy(&value, bytes + offset, sizeof(value));
+		if (!Math::is_finite(value)) {
+			return false;
+		}
+	}
+	if (!set_rollback_scale(extras[24])) {
+		return false;
+	}
+	recorder.Rewind();
+	space->get_physics_system().RestoreBodyState(*jolt_body, recorder);
+	if (recorder.IsFailed()) {
+		return false;
+	}
+	set_rollback_extras(extras);
+	return true;
 }
 
 Variant JoltBody3D::get_state(PhysicsServer3D::BodyState p_state) const {
